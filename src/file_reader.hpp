@@ -18,6 +18,11 @@ class FileReader {
   void from_path(const std::string& path, const bool split_channel = false);
 
   // get info
+  const std::int16_t numChannels() const;
+  const std::int32_t sampleRate() const;
+  const std::int16_t numBitsPerSample() const;
+  const std::int32_t numSamples() const;
+  const float* contiguousReadPointer() const;
 
  private:
   class Impl;

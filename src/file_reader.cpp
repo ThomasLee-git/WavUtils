@@ -23,6 +23,16 @@ class FileReader::Impl {
   void from_path(const std::string& path, const bool split_channel);
   void from_data(const std::vector<ByteType>& data, const bool split_channel);
 
+  const std::int16_t numChannels() const { return reader_->numChannels(); }
+  const std::int32_t sampleRate() const { return reader_->sampleRate(); }
+  const std::int16_t numBitsPerSample() const {
+    return reader_->numBitsPerSample();
+  }
+  const std::int32_t numSamples() const { return reader_->numSamples(); }
+  const float* contiguousReadPointer() const {
+    return reader_->contiguousReadPointer();
+  }
+
  private:
   bool _initiated = false;
   std::unique_ptr<WavReader> reader_;
@@ -61,6 +71,22 @@ FileReader::~FileReader() = default;
 
 void FileReader::from_path(const std::string& path, const bool split_channel) {
   return impl_->from_path(path, split_channel);
+}
+
+const std::int16_t FileReader::numChannels() const {
+  return impl_->numChannels();
+}
+const std::int32_t FileReader::sampleRate() const {
+  return impl_->sampleRate();
+}
+const std::int16_t FileReader::numBitsPerSample() const {
+  return impl_->numBitsPerSample();
+}
+const std::int32_t FileReader::numSamples() const {
+  return impl_->numSamples();
+}
+const float* FileReader::contiguousReadPointer() const {
+  return impl_->contiguousReadPointer();
 }
 
 }  // namespace wav_utils
