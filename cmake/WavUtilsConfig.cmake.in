@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/WavUtilsTargets.cmake")
+
+# When both static and shared are installed, provide WavUtils::wav_utils as alias to static
+if(TARGET WavUtils::wav_utils_static AND NOT TARGET WavUtils::wav_utils)
+  add_library(WavUtils::wav_utils ALIAS WavUtils::wav_utils_static)
+endif()
+
