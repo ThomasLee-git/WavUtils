@@ -20,26 +20,26 @@ class FileReader::Impl {
   Impl(Impl&&) = delete;
   Impl& operator=(Impl&&) = delete;
 
-  void from_path(const std::string& path, const bool split_channel);
-  void from_data(const std::vector<ByteType>& data, const bool split_channel);
+  void fromPath(const std::string& path, const bool split_channel);
+  void fromData(const std::vector<ByteType>& data, const bool split_channel);
 
-  const std::int16_t numChannels() const { return reader_->numChannels(); }
-  const std::int32_t sampleRate() const { return reader_->sampleRate(); }
+  const std::int16_t numChannels() const { return _reader->numChannels(); }
+  const std::int32_t sampleRate() const { return _reader->sampleRate(); }
   const std::int16_t numBitsPerSample() const {
-    return reader_->numBitsPerSample();
+    return _reader->numBitsPerSample();
   }
-  const std::int32_t numSamples() const { return reader_->numSamples(); }
+  const std::int32_t numSamples() const { return _reader->numSamples(); }
   const float* contiguousReadPointer() const {
-    return reader_->contiguousReadPointer();
+    return _reader->contiguousReadPointer();
   }
 
  private:
   bool _initiated = false;
-  std::unique_ptr<WavReader> reader_;
+  std::unique_ptr<WavReader> _reader;
 };
 
-void FileReader::Impl::from_path(const std::string& path,
-                                 const bool split_channel) {
+void FileReader::Impl::fromPath(const std::string& path,
+                                const bool split_channel) {
   std::ifstream rbf(path, std::ios::binary);
   if (!rbf.is_open()) {
     const auto err_msg = format_string("failed opening %s", path.c_str());
@@ -57,11 +57,11 @@ void FileReader::Impl::from_path(const std::string& path,
   rbf.seekg(0, std::ios::beg);
   std::vector<ByteType> data(file_size);
   rbf.read(reinterpret_cast<char*>(data.data()), file_size);
-  return this->from_data(data, split_channel);
+  return this->fromData(data, split_channel);
 }
-void FileReader::Impl::from_data(const std::vector<ByteType>& data,
-                                 const bool split_channel) {
-  reader_ = std::make_unique<WavReader>(data, split_channel);
+void FileReader::Impl::fromData(const std::vector<ByteType>& data,
+                                const bool split_channel) {
+  _reader = std::make_unique<WavReader>(data, split_channel);
 }
 
 FileReader::FileReader() {
@@ -69,8 +69,8 @@ FileReader::FileReader() {
 }
 FileReader::~FileReader() = default;
 
-void FileReader::from_path(const std::string& path, const bool split_channel) {
-  return impl_->from_path(path, split_channel);
+void FileReader::fromPath(const std::string& path, const bool split_channel) {
+  return impl_->fromPath(path, split_channel);
 }
 
 const std::int16_t FileReader::numChannels() const {

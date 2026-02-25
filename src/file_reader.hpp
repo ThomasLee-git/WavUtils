@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -15,7 +16,7 @@ class FileReader {
   FileReader& operator=(FileReader&&) = delete;
 
   // read data
-  void from_path(const std::string& path, const bool split_channel = false);
+  void fromPath(const std::string& path, const bool split_channel = false);
 
   // get info
   const std::int16_t numChannels() const;

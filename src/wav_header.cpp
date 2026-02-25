@@ -4,20 +4,20 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
 namespace wav_utils {
 
 template <class T>
 void to_int(ByteType const* data, int const n, T& result) {
-  // NOTE: wav use little_endian
-  constexpr int shift = 8;
   auto idx = 0;
   result = 0;
   do {
-    result |= data[idx] << (shift * idx);
+    result |= data[idx] << (wav_utils::constants::num_bits_per_byte * idx);
     idx += 1;
   } while (idx < n);
   return;
@@ -28,6 +28,21 @@ template void to_int<std::int32_t>(ByteType const* data,
 template void to_int<std::int16_t>(ByteType const* data,
                                    int const n,
                                    std::int16_t& result);
+
+template <class T>
+void from_int(const T value, int const n, ByteType* data) {
+  for (auto idx = 0; idx < n; ++idx) {
+    data[idx] = static_cast<ByteType>(
+        (value >> (wav_utils::constants::num_bits_per_byte * idx)) & 0xFF);
+  }
+  return;
+}
+template void from_int<std::int32_t>(std::int32_t value,
+                                     int const n,
+                                     ByteType* data);
+template void from_int<std::int16_t>(std::int16_t value,
+                                     int const n,
+                                     ByteType* data);
 
 void to_string(ByteType const* data, int const n, std::string& result) {
   std::ostringstream oss;
@@ -75,6 +90,11 @@ class FmtChunk {
   FmtChunk& operator=(FmtChunk&&) = delete;
 
   FmtChunk(ByteType const* data, std::int32_t const size);
+  FmtChunk(const std::int16_t num_channels,
+           const std::int32_t num_samples_per_second,
+           const std::int16_t num_bits_per_sample);
+
+  std::vector<ByteType> toBytes() const;
 
   const std::int16_t numChannels() const { return _num_channels; }
   const std::int32_t sampleRate() const { return _num_samples_per_second; }
@@ -147,6 +167,58 @@ FmtChunk::FmtChunk(ByteType const* data, std::int32_t const size) {
   return;
 }
 
+FmtChunk::FmtChunk(const std::int16_t num_channels,
+                   const std::int32_t num_samples_per_second,
+                   const std::int16_t num_bits_per_sample) {
+  // copy
+  _num_channels = num_channels;
+  _num_samples_per_second = num_samples_per_second;
+  _num_bits_per_sample = num_bits_per_sample;
+
+  // calculate
+  _format_tag = FormatTag::WAVE_FORMAT_PCM;
+  _num_avg_bytes_per_second = num_samples_per_second * num_channels *
+                              num_bits_per_sample /
+                              wav_utils::constants::num_bits_per_byte;
+  _num_bytes_per_data_block = num_channels * num_bits_per_sample /
+                              wav_utils::constants::num_bits_per_byte;
+  // skip extension
+  _has_extension = false;
+  _num_bytes_extension = 0;
+  _num_valid_bits = 0;
+  _speaker_position_mask = 0;
+  _sub_format = "";
+}
+
+std::vector<ByteType> FmtChunk::toBytes() const {
+  // TODO: add extension
+  std::vector<ByteType> head = {'f', 'm', 't', ' '};
+  std::vector<ByteType> size(4);
+  std::vector<ByteType> body(16);
+  // fmt chunk body
+  auto pos = 0;
+  from_int(static_cast<std::int16_t>(_format_tag), 2, &body[pos]);
+  pos += 2;
+  from_int(_num_channels, 2, &body[pos]);
+  pos += 2;
+  from_int(_num_samples_per_second, 4, &body[pos]);
+  pos += 4;
+  from_int(_num_avg_bytes_per_second, 4, &body[pos]);
+  pos += 4;
+  from_int(_num_bytes_per_data_block, 2, &body[pos]);
+  pos += 2;
+  from_int(_num_bits_per_sample, 2, &body[pos]);
+  pos += 2;
+
+  // fill size
+  from_int(body.size(), size.size(), size.data());
+  // assemble
+  head.insert(head.end(), std::make_move_iterator(size.begin()),
+              std::make_move_iterator(size.end()));
+  head.insert(head.end(), std::make_move_iterator(body.begin()),
+              std::make_move_iterator(body.end()));
+  return head;
+}
 class FactChunk {
  public:
   FactChunk() = delete;
@@ -179,33 +251,94 @@ class DataChunk {
   DataChunk& operator=(DataChunk&&) = delete;
 
   DataChunk(ByteType const* data, std::int32_t const size);
+  DataChunk(const bool dummy);
+  std::vector<ByteType> toBytes(const std::vector<float>& data,
+                                const std::int16_t num_bits_per_sample) const;
 
-  const std::int32_t numBytes() const { return size_; }
+  const std::int32_t numBytes() const { return _size; }
   void read(std::vector<std::int16_t>& data,
             const std::int16_t num_bytes_per_sample) const;
   void read(std::vector<std::int32_t>& data,
             const std::int16_t num_bytes_per_sample) const;
 
  private:
-  ByteType const* data_;
-  std::int32_t size_;
+  ByteType const* _data;
+  std::int32_t _size;
 };
 
 DataChunk::DataChunk(ByteType const* data, std::int32_t const size) {
-  data_ = data;
-  size_ = size;
+  _data = data;
+  _size = size;
+}
+
+DataChunk::DataChunk(const bool dummy) {
+  return;
+}
+
+std::vector<ByteType> DataChunk::toBytes(
+    const std::vector<float>& data,
+    const std::int16_t num_bits_per_sample) const {
+  std::vector<ByteType> head = {'d', 'a', 't', 'a'};
+  std::vector<ByteType> size(4);
+  const auto num_bytes_per_sample =
+      num_bits_per_sample / wav_utils::constants::num_bits_per_byte;
+  std::vector<ByteType> body(data.size() * num_bytes_per_sample);
+
+  // write
+  switch (num_bits_per_sample) {
+    case (16): {
+      for (auto idx = 0; idx < data.size(); ++idx) {
+        const auto v = std::max(-1.f, std::min(1.f, data[idx]));
+        const std::int16_t s = static_cast<std::int16_t>(v * INT16_MAX);
+        from_int(s, num_bytes_per_sample, &body[idx * num_bytes_per_sample]);
+      }
+      break;
+    }
+    case (24): {
+      for (auto idx = 0; idx < data.size(); ++idx) {
+        const auto v = std::max(-1.f, std::min(1.f, data[idx]));
+        const std::int32_t s = static_cast<std::int32_t>(v * INT16_MAX);
+        from_int(s, num_bytes_per_sample, &body[idx * num_bytes_per_sample]);
+      }
+      break;
+    }
+    case (32): {
+      for (auto idx = 0; idx < data.size(); ++idx) {
+        const auto v = std::max(-1.f, std::min(1.f, data[idx]));
+        const std::int32_t s = static_cast<std::int32_t>(v * INT16_MAX);
+        from_int(s, num_bytes_per_sample, &body[idx * num_bytes_per_sample]);
+      }
+      break;
+    }
+    default: {
+      const auto err_msg =
+          format_string("unsupported bit_depth=%d", num_bits_per_sample);
+      throw std::runtime_error(err_msg);
+      break;
+    }
+  }
+
+  // fill size
+  from_int(body.size(), size.size(), size.data());
+
+  // assemble
+  head.insert(head.end(), std::make_move_iterator(size.begin()),
+              std::make_move_iterator(size.end()));
+  head.insert(head.end(), std::make_move_iterator(body.begin()),
+              std::make_move_iterator(body.end()));
+  return head;
 }
 
 void DataChunk::read(std::vector<std::int16_t>& data,
                      const std::int16_t num_bytes_per_sample) const {
   for (auto idx = 0; idx < data.size(); ++idx) {
-    to_int(&data_[idx * num_bytes_per_sample], num_bytes_per_sample, data[idx]);
+    to_int(&_data[idx * num_bytes_per_sample], num_bytes_per_sample, data[idx]);
   }
 }
 void DataChunk::read(std::vector<std::int32_t>& data,
                      const std::int16_t num_bytes_per_sample) const {
   for (auto idx = 0; idx < data.size(); ++idx) {
-    to_int(&data_[idx * num_bytes_per_sample], num_bytes_per_sample, data[idx]);
+    to_int(&_data[idx * num_bytes_per_sample], num_bytes_per_sample, data[idx]);
   }
 }
 
@@ -351,6 +484,79 @@ const std::int32_t WavReader::numSamples() const {
 }
 const float* WavReader::contiguousReadPointer() const {
   return impl_->contiguousReadPointer();
+}
+
+// WavWriter
+
+class WavWriter::Impl {
+ public:
+  Impl() = default;
+  ~Impl() = default;
+  Impl(const Impl&) = delete;
+  Impl& operator=(const Impl&) = delete;
+  Impl(Impl&&) = delete;
+  Impl& operator=(Impl&&) = delete;
+
+  std::vector<ByteType> toBytes(const std::vector<float>& data,
+                                const std::int16_t num_channels,
+                                const std::int32_t num_samples,
+                                const std::int32_t sample_rate,
+                                const std::int16_t num_bits_per_sample) const;
+};
+
+std::vector<ByteType> WavWriter::Impl::toBytes(
+    const std::vector<float>& data,
+    const std::int16_t num_channels,
+    const std::int32_t num_samples,
+    const std::int32_t sample_rate,
+    const std::int16_t num_bits_per_sample) const {
+  // check
+  check_condition(num_samples * num_channels == data.size(),
+                  format_string("mismatched %l vs %z",
+                                num_samples * num_channels, data.size()));
+  // to bytes
+  std::vector<ByteType> out = {'R', 'I', 'F', 'F'};
+  std::vector<ByteType> size(4);
+  std::vector<ByteType> head = {'W', 'A', 'V', 'E'};
+
+  FmtChunk fmt_chunk(num_channels, sample_rate, num_bits_per_sample);
+  auto fmt_chunk_bytes = fmt_chunk.toBytes();
+  DataChunk data_chunk(false);
+  auto data_chunk_bytes = data_chunk.toBytes(data, num_bits_per_sample);
+
+  // fill size
+  from_int(head.size() + fmt_chunk_bytes.size() + data_chunk_bytes.size(),
+           size.size(), size.data());
+
+  // assemble
+  // size
+  out.insert(out.end(), std::make_move_iterator(size.begin()),
+             std::make_move_iterator(size.end()));
+  // head
+  out.insert(out.end(), std::make_move_iterator(head.begin()),
+             std::make_move_iterator(head.end()));
+  // fmt
+  out.insert(out.end(), std::make_move_iterator(fmt_chunk_bytes.begin()),
+             std::make_move_iterator(fmt_chunk_bytes.end()));
+  // data
+  out.insert(out.end(), std::make_move_iterator(data_chunk_bytes.begin()),
+             std::make_move_iterator(data_chunk_bytes.end()));
+  return out;
+}
+
+WavWriter::WavWriter() {
+  impl_ = std::make_unique<Impl>();
+}
+WavWriter::~WavWriter() = default;
+
+std::vector<ByteType> WavWriter::toBytes(
+    const std::vector<float>& data,
+    const std::int16_t num_channels,
+    const std::int32_t num_samples,
+    const std::int32_t sample_rate,
+    const std::int16_t num_bits_per_sample) const {
+  return impl_->toBytes(data, num_channels, num_samples, sample_rate,
+                        num_bits_per_sample);
 }
 
 }  // namespace wav_utils

@@ -20,6 +20,7 @@ set(SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/data_structure.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wav_header.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/file_reader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/file_writer.cpp
 )
 
 set(PUBLIC_HEADERS
@@ -85,8 +86,12 @@ install(
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-# Install public headers
-install(FILES ${PUBLIC_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+# Installed headers go under include/<WavUtils>/ (e.g. #include <WavUtils/utils.hpp>)
+set(WAV_UTILS_INCLUDE_SUBDIR WavUtils)
+# Install public headers into their own directory (e.g. include/WavUtils/)
+install(FILES ${PUBLIC_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${WAV_UTILS_INCLUDE_SUBDIR}
+)
 
 # Export targets for config package (generated in root CMakeLists.txt)
 set(WAV_UTILS_EXPORT_NAME
