@@ -55,8 +55,12 @@ void FileReader::Impl::fromPath(const std::string& path,
   }
   // rewind
   rbf.seekg(0, std::ios::beg);
-  std::vector<ByteType> data(file_size);
-  rbf.read(reinterpret_cast<char*>(data.data()), file_size);
+  std::vector<ByteType> data(static_cast<std::size_t>(file_size));
+  rbf.read(reinterpret_cast<char*>(data.data()),
+           static_cast<std::streamsize>(file_size));
+  if (rbf.gcount() != static_cast<std::streamsize>(file_size)) {
+    throw std::runtime_error("failed reading file: read size mismatch");
+  }
   return this->fromData(data, split_channel);
 }
 void FileReader::Impl::fromData(const std::vector<ByteType>& data,
@@ -65,28 +69,28 @@ void FileReader::Impl::fromData(const std::vector<ByteType>& data,
 }
 
 FileReader::FileReader() {
-  impl_ = std::make_unique<Impl>();
+  _impl = std::make_unique<Impl>();
 }
 FileReader::~FileReader() = default;
 
 void FileReader::fromPath(const std::string& path, const bool split_channel) {
-  return impl_->fromPath(path, split_channel);
+  return _impl->fromPath(path, split_channel);
 }
 
 const std::int16_t FileReader::numChannels() const {
-  return impl_->numChannels();
+  return _impl->numChannels();
 }
 const std::int32_t FileReader::sampleRate() const {
-  return impl_->sampleRate();
+  return _impl->sampleRate();
 }
 const std::int16_t FileReader::numBitsPerSample() const {
-  return impl_->numBitsPerSample();
+  return _impl->numBitsPerSample();
 }
 const std::int32_t FileReader::numSamples() const {
-  return impl_->numSamples();
+  return _impl->numSamples();
 }
 const float* FileReader::contiguousReadPointer() const {
-  return impl_->contiguousReadPointer();
+  return _impl->contiguousReadPointer();
 }
 
 }  // namespace wav_utils

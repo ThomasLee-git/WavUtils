@@ -14,18 +14,18 @@ constexpr int num_bits_per_byte = 8;
 using ByteType = std::uint8_t;
 
 template <class T>
-void to_int(ByteType const* data, int const n, T& result);
+void to_int(const ByteType* data, const int n, T& result);
 
 template <class T>
-void from_int(const T value, int const n, ByteType* data);
+void from_int(const T value, const int n, ByteType* data);
 
-void to_string(ByteType const* data, int const n, std::string& result);
+void to_string(const ByteType* data, const int n, std::string& result);
 
-int find_pos(ByteType const* data,
-             int const l_idx,
-             int const r_idx,
+int find_pos(const ByteType* data,
+             const int l_idx,
+             const int r_idx,
              const std::string& target,
-             int const n);
+             const int n);
 
 class WavReader {
  public:
@@ -46,7 +46,7 @@ class WavReader {
 
  private:
   class Impl;
-  std::unique_ptr<Impl> impl_;
+  std::unique_ptr<Impl> _impl;
 };
 
 class WavWriter {
@@ -58,15 +58,16 @@ class WavWriter {
   WavWriter& operator=(WavWriter&&) = delete;
   ~WavWriter();
 
-  std::vector<ByteType> toBytes(const std::vector<float>& data,
-                                const std::int16_t num_channels,
-                                const std::int32_t num_samples,
-                                const std::int32_t sample_rate,
-                                const std::int16_t num_bits_per_sample) const;
+  void toBytes(const float* data,
+               const std::int16_t num_channels,
+               const std::int32_t num_samples,
+               const std::int32_t sample_rate,
+               const std::int16_t num_bits_per_sample,
+               std::vector<std::vector<ByteType>>& out) const;
 
  private:
   class Impl;
-  std::unique_ptr<Impl> impl_;
+  std::unique_ptr<Impl> _impl;
 };
 
 }  // namespace wav_utils

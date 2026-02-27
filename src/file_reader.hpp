@@ -27,7 +27,7 @@ class FileReader {
 
  private:
   class Impl;
-  std::unique_ptr<Impl> impl_;
+  std::unique_ptr<Impl> _impl;
 };
 
 }  // namespace wav_utils

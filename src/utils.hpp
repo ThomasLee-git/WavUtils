@@ -14,8 +14,14 @@ std::string format_string(const char* format, Args... args) {
     return std::string();
   }
   const auto len = static_cast<size_t>(expected_len) + 1;
-  std::unique_ptr<char[]> buf(new char[len]);
-  std::snprintf(buf.get(), len, format, args...);
-  return std::string(buf.get(), buf.get() + len - 1);
+  constexpr size_t kStackBufSize = 256;
+  if (len <= kStackBufSize) {
+    thread_local char buf[kStackBufSize];
+    std::snprintf(buf, len, format, args...);
+    return std::string(buf, buf + len - 1);
+  }
+  std::unique_ptr<char[]> heap_buf(new char[len]);
+  std::snprintf(heap_buf.get(), len, format, args...);
+  return std::string(heap_buf.get(), heap_buf.get() + len - 1);
 }
 }  // namespace wav_utils

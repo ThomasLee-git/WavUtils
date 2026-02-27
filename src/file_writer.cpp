@@ -20,7 +20,7 @@ class FileWriter::Impl {
   Impl& operator=(Impl&&) = delete;
 
   void toPath(const std::string& path,
-              const std::vector<float>& data,
+              const float* data,
               const std::int16_t num_channels,
               const std::int32_t num_samples,
               const std::int32_t sample_rate,
@@ -28,7 +28,7 @@ class FileWriter::Impl {
 };
 
 void FileWriter::Impl::toPath(const std::string& path,
-                              const std::vector<float>& data,
+                              const float* data,
                               const std::int16_t num_channels,
                               const std::int32_t num_samples,
                               const std::int32_t sample_rate,
@@ -36,12 +36,12 @@ void FileWriter::Impl::toPath(const std::string& path,
   check_condition(
       num_channels > 0 && num_samples > 0 && num_bits_per_sample > 0,
       "setFormat must be called before toPath");
-  check_condition(!data.empty(), "setData must be called before toPath");
+  check_condition(data != nullptr, "data must not be null");
 
   WavWriter writer;
-
-  auto file_bytes = writer.toBytes(data, num_channels, num_samples, sample_rate,
-                                   num_bits_per_sample);
+  std::vector<std::vector<ByteType>> file_bytes;
+  writer.toBytes(data, num_channels, num_samples, sample_rate,
+                 num_bits_per_sample, file_bytes);
 
   std::ofstream wbf(path, std::ios::binary);
   if (!wbf.is_open()) {
@@ -49,23 +49,26 @@ void FileWriter::Impl::toPath(const std::string& path,
     throw std::runtime_error(err_msg);
   }
   wbf.seekp(0, std::ios::beg);
-  wbf.write(reinterpret_cast<const char*>(file_bytes.data()),
-            static_cast<std::streamsize>(file_bytes.size()));
+  for (const auto& tmp_bytes : file_bytes) {
+    wbf.write(reinterpret_cast<const char*>(tmp_bytes.data()),
+              static_cast<std::streamsize>(tmp_bytes.size()));
+  }
+
   return;
 }
 
 FileWriter::FileWriter() {
-  impl_ = std::make_unique<Impl>();
+  _impl = std::make_unique<Impl>();
 }
 FileWriter::~FileWriter() = default;
 
 void FileWriter::toPath(const std::string& path,
-                        const std::vector<float>& data,
+                        const float* data,
                         const std::int16_t num_channels,
                         const std::int32_t num_samples,
                         const std::int32_t sample_rate,
                         const std::int16_t num_bits_per_sample) const {
-  impl_->toPath(path, data, num_channels, num_samples, sample_rate,
+  _impl->toPath(path, data, num_channels, num_samples, sample_rate,
                 num_bits_per_sample);
 }
 
